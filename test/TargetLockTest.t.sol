@@ -64,6 +64,10 @@ contract TargetLockTest is Test {
         address _addr = targetLock.owner();
         vm.startPrank(_addr);
         targetLock.save{value: 5 ether}();
+
+        vm.expectEmit(true, true, false, true);
+        emit TargetLock.Withdraw(5 ether, _addr);
+
         targetLock.withdraw(5 ether);
         vm.stopPrank();
     }
@@ -76,5 +80,11 @@ contract TargetLockTest is Test {
         vm.expectRevert();
         targetLock.withdraw(6 ether);
         vm.stopPrank();
+    }
+
+    // revert if not owner
+    function test_RevertIfNonOwnerWithdraws() public {
+        vm.expectRevert(TargetLock.OnlyOwnerCanWithdraw.selector);
+        targetLock.withdraw(1 ether);
     }
 }
