@@ -5,14 +5,15 @@ pragma solidity ^0.8.13;
 //  Set the owner
 //  function to check if targeted amount is reached
 // function for withdrawal
-error targetAmountNotReached(uint256, uint256 _targetAmount);
-error onlyOwnerCanWithdraw();
 
 contract TargetLock {
+    error TargetAmountNotReached(uint256, uint256 _targetAmount);
+    error OnlyOwnerCanWithdraw();
+
     uint256 public targetAmount;
     address public owner;
 
-    mapping(address => uint) savings;
+    mapping(address => uint) public savings;
 
     // event
     event Save(uint256 indexed _amount, address _addr);
@@ -31,7 +32,7 @@ contract TargetLock {
 
     modifier onlyOwner() {
         if (owner != msg.sender) {
-            revert onlyOwnerCanWithdraw();
+            revert OnlyOwnerCanWithdraw();
         }
         _;
     }
@@ -45,7 +46,7 @@ contract TargetLock {
         uint256 userBalance = savings[msg.sender];
 
         if (userBalance < targetAmount) {
-            revert targetAmountNotReached(userBalance, targetAmount);
+            revert TargetAmountNotReached(userBalance, targetAmount);
         }
 
         require(_amount <= userBalance, "Not enough savings");
