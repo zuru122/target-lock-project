@@ -19,8 +19,8 @@
 
 <!-- Interaction -->
 ## Interaction
-$ forge script script/DeployTargetLock.s.sol
-$ forge test
+* ```$ forge script script/DeployTargetLock.s.sol```
+* ```$ forge test```
 
 
 
