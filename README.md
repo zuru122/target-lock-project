@@ -3,8 +3,8 @@
 
 ### Goal:
 * A smart contract TargetLock that allows you to save your funds and only withdraw it when your goal set is met. Goal can be amount you aim to save or a particular time you want to withdraw your funds.
-* 
-* The project is built in phases, as I implement and check then as I go
+  
+* The project is built in phases, as I implement and check them as I go
 
 ### Step 1:
 * Implement the targetAmount
@@ -19,8 +19,8 @@
 
 <!-- Interaction -->
 ## Interaction
-forge script script/DeployTargetLock.s.sol
-forge test
+$ forge script script/DeployTargetLock.s.sol
+$ forge test
 
 
 
