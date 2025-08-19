@@ -33,24 +33,27 @@ contract TargetLock {
     event Save(uint256 indexed _amount, address _addr);
     event Withdraw(uint256 indexed _amount, address _addr);
 
-    constructor(uint256 _targetAmount) {
+    constructor() {
         owner = msg.sender;
     }
 
-    function save(
-        Mode _mode,
-        uint256 _targetAmount,
-        uint256 _unlockTime
-    ) public payable {
+    // Save based on Amount or Time based
+    function saveAmountBased(uint256 _targetAmount) public payable {
         require(msg.value > 0, "Must send some ETH");
         Saver storage saver = savers[msg.sender];
         saver.balance += msg.value;
-        saver.mode = _mode;
-        if (_mode == Mode.AmountBased) {
-            saver.targetAmount = _targetAmount;
-        } else {
-            saver.unlockTime = _unlockTime;
-        }
+        saver.mode = Mode.AmountBased;
+        saver.targetAmount = _targetAmount;
+
+        emit Save(msg.value, msg.sender);
+    }
+
+    function saveTimeBased(uint256 _unlockTime) public payable {
+        require(msg.value > 0, "Must send some ETH");
+        Saver storage saver = savers[msg.sender];
+        saver.balance += msg.value;
+        saver.mode = Mode.TimeBased;
+        saver.unlockTime = _unlockTime;
 
         emit Save(msg.value, msg.sender);
     }
