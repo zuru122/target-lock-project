@@ -7,13 +7,13 @@ import {TargetLock} from "../src/TargetLock.sol";
 contract DeployTargetLock is Script {
     TargetLock public targetLock;
 
-    uint256 constant TARGET = 5 ether;
+    // uint256 constant TARGET = 5 ether;
 
     // function setUp() public {}
 
     function run() external returns (TargetLock) {
         vm.startBroadcast();
-        targetLock = new TargetLock(TARGET);
+        targetLock = new TargetLock();
         vm.stopBroadcast();
         return targetLock;
     }
