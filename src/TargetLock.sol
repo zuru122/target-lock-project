@@ -1,18 +1,38 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.18;
 
 // Take in the targeted amount / date
 // check balance
 //  check if targeted amount / date is met
 //  withdrawal
 
-contract TargetLock {
-    error TargetAlreadySet();
-    error TargetAmountNotReached(uint256 current, uint256 required);
-    error WithdrawTimeNotReached(uint256 currentTime, uint256 unlockTime);
-    error NoSavingsFound();
+/// @title TargetLock - Self-custodial savings vault (amount-based or time-based)
+/// @notice Pick a mode & goal once, then deposit until it matures. withdrawal are all or nothing
+/// @dev No global owner; each address controls only it's own vault.
 
-    // enum
+contract TargetLock {
+    // ---------- Errors ----------
+    error AlreadyInitialized();
+    error NotInitialized();
+    error ZeroDeposit();
+    error NothingToWithdraw();
+    error AmountTargetNotReached(uint256 current, uint256 required);
+    error TimeTargetNotReached(uint256 nowTs, uint256 unlockTime);
+    error WrongMode();
+
+    // ---------- Reentrancy Guard ----------
+    uint256 private constant _NOT_ENTERED = 1;
+    uint256 private constant _ENTERED = 2;
+    uint256 private _status = _NOT_ENTERED;
+
+    modifier nonReentrant() {
+        if (_status == _ENTERED) revert();
+        _status = _ENTERED;
+        _;
+        _status = _NOT_ENTERED;
+    }
+
+    // ---------- Types / Storage ----------
     enum Mode {
         AmountBased,
         TimeBased
@@ -29,49 +49,73 @@ contract TargetLock {
 
     mapping(address => Saver) public savers;
 
-    // event
-    event Save(uint256 indexed _amount, address _addr);
-    event Withdraw(uint256 indexed _amount, address _addr);
+    // ---------- event ----------
+    event GoalInitialized(
+        address indexed user,
+        Mode mode,
+        uint256 targetAmount,
+        uint256 unlockTime,
+        uint256 firstDeposit
+    );
+    event Save(
+        address indexed from,
+        address indexed user,
+        uint256 amount,
+        uint256 newBalance
+    );
+    event WithdrawAll(address indexed user, uint256 amount);
 
     // ----------- SETUP (one-time) -----------
 
     // Save based on Amount or Time based
-    function initAmountBased(uint256 _targetAmount) external payable {
-        require(msg.value > 0, "Must send some ETH");
+    /// @notice Initialize an amount-based goal and deposit the first ETH.
+    function initAmountBased(uint256 targetAmount) external payable {
+        if (msg.value == 0) revert ZeroDeposit();
         Saver storage saver = savers[msg.sender];
-        if (saver.initialized) revert TargetAlreadySet();
+        if (saver.initialized) revert AlreadyInitialized();
+        if (targetAmount == 0) revert AmountTargetNotReached(0, 1);
 
         saver.balance = msg.value;
         saver.mode = Mode.AmountBased;
-        saver.targetAmount = _targetAmount;
+        saver.targetAmount = targetAmount;
         saver.initialized = true;
 
-        emit Save(msg.value, msg.sender);
+        emit GoalInitialized(
+            msg.sender,
+            saver.mode,
+            targetAmount,
+            0,
+            msg.value
+        );
+        emit Save(msg.sender, msg.sender, msg.value, saver.balance);
     }
 
-    function initTimeBased(uint256 _unlockTime) external payable {
-        require(msg.value > 0, "Must send some ETH");
+    /// @notice Initialize a time-based goal and deposit the first ETH.
+    function initTimeBased(uint256 unlockTime) external payable {
+        if (msg.value == 0) revert ZeroDeposit();
         Saver storage saver = savers[msg.sender];
-        if (saver.initialized) revert TargetAlreadySet();
+        if (saver.initialized) revert AlreadyInitialized();
+        if (unlockTime <= block.timestamp) revert TimeTargetNotReached();
 
         saver.balance = msg.value;
         saver.mode = Mode.TimeBased;
-        saver.unlockTime = _unlockTime;
+        saver.unlockTime = unlockTime;
         saver.initialized = true;
 
-        emit Save(msg.value, msg.sender);
+        emit GoalInitialized(msg.sender, saver.mode, 0, unlockTime, msg.value);
+        emit Save(msg.sender, msg.sender, msg.value, saver.balance);
     }
 
-    // ----------- SAVING -----------
-
-    function save() external payable {
+    // ----------- Deposit -----------
+    /// @notice Deposit more to your own vault after initialization
+    function deposit() external payable {
         Saver storage saver = savers[msg.sender];
-        if (!saver.initialized) revert NoSavingsFound();
-        require(msg.value > 0, "Must send ETH");
+        if (!saver.initialized) revert NotInitialized();
+        if (msg.value > 0) revert ZeroDeposit();
 
         saver.balance += msg.value;
 
-        emit Save(msg.value, msg.sender);
+        emit Save(msg.sender, msg.sender, msg.value, saver.balance);
     }
 
     // ----------- CHECK BALANCE -----------
