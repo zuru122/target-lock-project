@@ -7,9 +7,10 @@ pragma solidity ^0.8.13;
 // function for withdrawal
 
 contract TargetLock {
-    error TargetAmountNotReached(uint256, uint256 _targetAmount);
-    error OnlyOwnerCanWithdraw();
+    error TargetAlreadySet();
+    error TargetAmountNotReached(uint256 current, uint256 required);
     error WithdrawTimeNotReached(uint256 currentTime, uint256 unlockTime);
+    error NoSavingsFound();
 
     // enum
     enum Mode {
@@ -23,9 +24,8 @@ contract TargetLock {
         uint256 targetAmount;
         uint256 unlockTime;
         Mode mode;
+        bool initialized;
     }
-
-    address public owner;
 
     mapping(address => Saver) public savers;
 
@@ -33,48 +33,59 @@ contract TargetLock {
     event Save(uint256 indexed _amount, address _addr);
     event Withdraw(uint256 indexed _amount, address _addr);
 
-    constructor() {
-        owner = msg.sender;
-    }
+    // ----------- SETUP (one-time) -----------
 
     // Save based on Amount or Time based
-    function saveAmountBased(uint256 _targetAmount) public payable {
+    function initAmountBased(uint256 _targetAmount) external payable {
         require(msg.value > 0, "Must send some ETH");
         Saver storage saver = savers[msg.sender];
-        saver.balance += msg.value;
+        if (saver.initialized) revert TargetAlreadySet();
+
+        saver.balance = msg.value;
         saver.mode = Mode.AmountBased;
         saver.targetAmount = _targetAmount;
+        saver.initialized = true;
 
         emit Save(msg.value, msg.sender);
     }
 
-    function saveTimeBased(uint256 _unlockTime) public payable {
+    function initTimeBased(uint256 _unlockTime) external payable {
         require(msg.value > 0, "Must send some ETH");
         Saver storage saver = savers[msg.sender];
-        saver.balance += msg.value;
+        if (saver.initialized) revert TargetAlreadySet();
+
+        saver.balance = msg.value;
         saver.mode = Mode.TimeBased;
         saver.unlockTime = _unlockTime;
+        saver.initialized = true;
 
         emit Save(msg.value, msg.sender);
     }
 
-    // modifier onlyOwner() {
-    //     if (owner != msg.sender) {
-    //         revert OnlyOwnerCanWithdraw();
-    //     }
-    //     _;
-    // }
+    // ----------- SAVING -----------
+
+    function save() external payable {
+        Saver storage saver = savers[msg.sender];
+        if (!saver.initialized) revert NoSavingsFound();
+        require(msg.value > 0, "Must send ETH");
+
+        saver.balance += msg.value;
+
+        emit Save(msg.value, msg.sender);
+    }
+
+    // ----------- CHECK BALANCE -----------
 
     function getBalance(address _user) public view returns (uint256) {
         return savers[_user].balance;
     }
 
     // withdraw
-    function withdraw(uint256 _amount) public {
+    function withdraw() external {
         Saver storage saver = savers[msg.sender];
+        if (!saver.initialized) revert NoSavingsFound();
         uint256 userBalance = saver.balance;
-
-        require(_amount <= userBalance, "Not enough savings");
+        require(userBalance > 0, "Nothing to withdraw");
 
         if (saver.mode == Mode.AmountBased) {
             if (userBalance < saver.targetAmount) {
@@ -89,17 +100,20 @@ contract TargetLock {
             }
         }
 
-        saver.balance -= _amount;
+        // withdraw ALL
+        saver.balance = 0;
+        saver.initialized = false; // reset so user can start a new target if they want
 
-        (bool success, ) = payable(msg.sender).call{value: _amount}("");
+        (bool success, ) = payable(msg.sender).call{value: userBalance}("");
         require(success, "Withdrawal failed");
 
-        emit Withdraw(_amount, msg.sender);
+        emit Withdraw(userBalance, msg.sender);
     }
 
     // Allow contract to receive ETH
     receive() external payable {
         Saver storage saver = savers[msg.sender];
+        if (!saver.initialized) revert NoSavingsFound();
         saver.balance += msg.value;
         emit Save(msg.value, msg.sender);
     }
