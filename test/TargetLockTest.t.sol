@@ -17,12 +17,4 @@ contract TargetLockTest is Test {
         deployer = new DeployTargetLock();
         targetLock = deployer.run();
     }
-
-    // Check that the contract deploys with owner == deployer
-    function testContractDeployerIsOwner() public {
-        address user = makeAddr("user");
-        vm.prank(user); // next call will come from "user"
-        TargetLock deployed = new TargetLock();
-        assertEq(deployed.owner(), user);
-    }
 }

@@ -15,9 +15,8 @@
 * Date-based withdrawal restriction adds more realistic use cases and state handling.
 
 ### Step 3
-* Multiple savers logic – right now, only the owner can withdraw; expand so each user can set their own target and withdraw individually.
+* Multiple savers logic – right now, only the owner can withdraw; expanded so each user can set their own target and withdraw individually.
 
-### Step 1 and 3"Done"
 
 <!-- Interaction -->
 ## Interaction

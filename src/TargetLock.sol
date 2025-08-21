@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-// Take in the targeted amount
-//  Set the owner
-//  function to check if targeted amount is reached
-// function for withdrawal
+// Take in the targeted amount / date
+// check balance
+//  check if targeted amount / date is met
+//  withdrawal
 
 contract TargetLock {
     error TargetAlreadySet();
