@@ -67,7 +67,7 @@ contract TargetLock {
 
     // ----------- SETUP (one-time) -----------
 
-    // Save based on Amount or Time based
+    // Save based on Amount or Time based.
     /// @notice Initialize an amount-based goal and deposit the first ETH.
     function initAmountBased(uint256 targetAmount) external payable {
         if (msg.value == 0) revert ZeroDeposit();
@@ -107,58 +107,111 @@ contract TargetLock {
     }
 
     // ----------- Deposit -----------
-    /// @notice Deposit more to your own vault after initialization
+    /// @notice Deposit more to your own vault after initialization.
     function deposit() external payable {
         Saver storage saver = savers[msg.sender];
         if (!saver.initialized) revert NotInitialized();
         if (msg.value > 0) revert ZeroDeposit();
 
         saver.balance += msg.value;
-
         emit Save(msg.sender, msg.sender, msg.value, saver.balance);
+    }
+
+    // Get contributions from family & friends
+    /// @notice Let family/friends contribute to our vault.
+    function depositFor(address user) external payable {
+        if (msg.value == 0) revert ZeroDeposit();
+        Saver storage saver = savers[user];
+        if (!saver.initialized) revert NotInitialized();
+
+        saver.balance += msg.value;
+        emit Save(msg.sender, user, msg.value, saver.balance);
     }
 
     // ----------- CHECK BALANCE -----------
 
-    function getBalance(address _user) public view returns (uint256) {
-        return savers[_user].balance;
+    function balanceOf(address user) public view returns (uint256) {
+        return savers[user].balance;
     }
 
-    // withdraw
-    function withdraw() external {
+    // withdraw (all or nothing - lol)
+    /// @notice withdraw 100% of your balance once your goal is mature/meet
+    function withdrawAll() external nonReentrant {
         Saver storage saver = savers[msg.sender];
-        if (!saver.initialized) revert NoSavingsFound();
+        if (!saver.initialized) revert NotInitialized();
         uint256 userBalance = saver.balance;
-        require(userBalance > 0, "Nothing to withdraw");
+        if (userBalance == 0) revert ZeroDeposit();
 
         if (saver.mode == Mode.AmountBased) {
             if (userBalance < saver.targetAmount) {
-                revert TargetAmountNotReached(userBalance, saver.targetAmount);
+                revert AmountTargetNotReached(userBalance, saver.targetAmount);
             }
+        } else if (block.timestamp < saver.unlockTime) {
+            revert TimeTargetNotReached(block.timestamp, saver.unlockTime);
         } else {
-            if (block.timestamp < saver.unlockTime) {
-                revert WithdrawTimeNotReached(
-                    block.timestamp,
-                    saver.unlockTime
-                );
-            }
+            revert WrongMode();
         }
 
         // withdraw ALL
         saver.balance = 0;
         saver.initialized = false; // reset so user can start a new target if they want
+        saver.targetAmount = 0;
+        saver.unlockTime = 0;
 
         (bool success, ) = payable(msg.sender).call{value: userBalance}("");
         require(success, "Withdrawal failed");
 
-        emit Withdraw(userBalance, msg.sender);
+        emit WithdrawAll(msg.sender, userBalance);
     }
 
-    // Allow contract to receive ETH
+    // ---------- Views ----------
+    /// @notice user can view their details including set goals, balance, mode
+    function goalOf(
+        address user
+    )
+        external
+        view
+        returns (
+            bool initialized,
+            Mode mode,
+            uint256 targetAmount,
+            uint256 unlockTime,
+            uint256 balance
+        )
+    {
+        Saver storage saver = savers[user];
+        return (
+            saver.initialized,
+            saver.mode,
+            saver.targetAmount,
+            saver.unlockTime,
+            saver.balance
+        );
+    }
+
+    // check if target goal is met.
+    function hasMatured(address user) external view returns (bool) {
+        Saver storage saver = savers[user];
+        if (!saver.initialized) return false;
+        if (saver.mode == Mode.AmountBased)
+            return saver.balance >= saver.targetAmount;
+        if (saver.mode == Mode.TimeBased)
+            return block.timestamp >= saver.unlockTime;
+        return false;
+    }
+
+    // check contract balance
+    function contractBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    /// @dev Direct sends only work for initialized users; otherwise revert to avoid lost funds.
     receive() external payable {
         Saver storage saver = savers[msg.sender];
-        if (!saver.initialized) revert NoSavingsFound();
+        if (!saver.initialized) revert NotInitialized();
+        if (msg.value == 0) revert ZeroDeposit();
+
         saver.balance += msg.value;
-        emit Save(msg.value, msg.sender);
+        emit Save(msg.sender, msg.sender, msg.value, saver.balance);
     }
 }
